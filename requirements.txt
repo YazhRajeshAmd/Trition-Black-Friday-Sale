@@ -1,0 +1,10 @@
+# Core app (Flask backend + client bridge to Triton)
+flask>=3.0
+numpy>=1.24
+requests>=2.31
+tritonclient[http]>=2.40
+
+# Optional, only needed to run scripts/export_dummy_model.py
+# (generates a placeholder/untrained ONNX model so the pipeline is
+# runnable end to end before you swap in a real trained CTR model):
+#   pip install torch onnx

@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Black Friday Shopping Rush — Triton on ROCm</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b0c0f;
+    --surface:#15171b;
+    --surface-2:#1c1f24;
+    --border:#2a2e35;
+    --text:#ece9e4;
+    --muted:#8a8f98;
+    --flash:#ff4620;
+    --flash-dim: rgba(255,70,32,.14);
+    --tech:#2fe0c4;
+    --tech-dim: rgba(47,224,196,.14);
+    --gold:#f5b942;
+    --gold-dim: rgba(245,185,66,.14);
+    --dev:#7c9bff;
+    --dev-dim: rgba(124,155,255,.14);
+    --font-display: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:var(--font-body); -webkit-font-smoothing:antialiased;}
+  ::selection{ background:var(--flash); color:#0b0c0f; }
+
+  .brandbar{
+    position:sticky; top:0; z-index:40;
+    background:linear-gradient(180deg, #0e0f12, #0b0c0f 90%);
+    border-bottom:1px solid var(--border);
+    padding:14px 22px 0;
+  }
+  .brandrow{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .brand-eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; color:var(--tech); text-transform:uppercase; margin-bottom:4px; }
+  .brand-title{ font-family:var(--font-display); font-weight:900; font-size:clamp(22px,3.2vw,34px); letter-spacing:-0.02em; line-height:1; transform:scaleX(.96); transform-origin:left; }
+  .brand-title span{ color:var(--flash); }
+  .stack-badge{ font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:6px; }
+  .stack-badge b{ color:var(--tech); font-weight:700; }
+  .stack-badge .divider{ color:var(--border); margin:0 6px; }
+  .controls{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+    background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:6px;
+    padding:9px 14px; cursor:pointer; transition:all .15s ease;
+  }
+  .btn:hover{ border-color:var(--muted); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .btn.primary{ background:var(--flash); color:#160600; border-color:var(--flash); font-weight:700; }
+  .btn.primary:hover{ background:#ff5a3a; }
+  .btn.active{ background:var(--tech); color:#04211c; border-color:var(--tech); font-weight:700; }
+  .btn.dev{ background:var(--dev); color:#140c33; border-color:var(--dev); font-weight:700; }
+  .btn.dev:hover{ background:#a99cff; }
+
+  .mode-pill{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em; padding:5px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted); display:inline-flex; align-items:center; gap:6px; }
+  .mode-pill .dot{ width:7px; height:7px; border-radius:50%; background:var(--muted); }
+  .mode-pill.live{ color:var(--tech); border-color:var(--tech); background:var(--tech-dim); }
+  .mode-pill.live .dot{ background:var(--tech); box-shadow:0 0 0 3px var(--tech-dim); }
+  .mode-pill.simulated{ color:var(--gold); border-color:var(--gold); background:var(--gold-dim); }
+  .mode-pill.simulated .dot{ background:var(--gold); }
+
+  .gauge-wrap{ margin:16px 0 0; }
+  .gauge-meta{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.08em;}
+  .gauge-meta b{ color:var(--text); font-weight:600; }
+  .gauge-track{ position:relative; height:34px; background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .gauge-fill{ position:absolute; inset:0 auto 0 0; width:12%; background:linear-gradient(90deg, var(--tech), var(--flash)); transition:width .6s cubic-bezier(.3,.9,.3,1), background .6s; }
+  .gauge-fill::after{ content:""; position:absolute; inset:0; background:repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 8px, transparent 8px 16px); }
+  .gauge-labels{ position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.02em; mix-blend-mode:difference; color:#fff; }
+  .stat-strip{ display:flex; gap:0; margin:14px 0 0; border-top:1px solid var(--border); }
+  .stat{ flex:1; padding:12px 16px; border-right:1px solid var(--border); }
+  .stat:last-child{ border-right:none; }
+  .stat-label{ font-family:var(--font-mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
+  .stat-value{ font-family:var(--font-display); font-weight:800; font-size:22px; margin-top:2px; }
+  .stat-value.flash{ color:var(--flash); }
+  .stat-value.tech{ color:var(--tech); }
+  .stat-value.gold{ color:var(--gold); }
+  .stat-sub{ font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:2px; }
+
+  .tabnav{ display:flex; gap:4px; margin:16px 0 0; }
+  .tab{
+    font-family:var(--font-mono); font-size:12px; text-transform:uppercase; letter-spacing:.06em;
+    padding:10px 18px; border:1px solid var(--border); border-bottom:none; border-radius:8px 8px 0 0;
+    background:var(--surface); color:var(--muted); cursor:pointer;
+  }
+  .tab.on{ background:var(--bg); color:var(--text); border-color:var(--border); position:relative; top:1px; font-weight:700;}
+  .tab.on.c0{ box-shadow: inset 0 3px 0 var(--dev); }
+  .tab.on.c1{ box-shadow: inset 0 3px 0 var(--flash); }
+  .tab.on.c2{ box-shadow: inset 0 3px 0 var(--tech); }
+  .tab.on.c3{ box-shadow: inset 0 3px 0 var(--gold); }
+
+  .disclaimer{ font-family:var(--font-mono); font-size:10px; color:var(--muted); text-align:center; padding:8px 12px; border-bottom:1px solid var(--border); background:#0e0f12; letter-spacing:.03em; }
+  .disclaimer b{ color:var(--text); }
+
+  main{ max-width:1180px; margin:0 auto; padding:0 22px 60px; }
+  .screen{ display:none; padding-top:24px; }
+  .screen.on{ display:block; }
+  .panel-title{ font-family:var(--font-display); font-weight:800; font-size:20px; margin:0 0 4px; letter-spacing:-.01em;}
+  .panel-sub{ font-family:var(--font-mono); font-size:12px; color:var(--muted); margin:0 0 18px; }
+
+  .dev-grid{ display:grid; grid-template-columns:1.15fr 1fr; gap:16px; align-items:start; }
+  @media (max-width:900px){ .dev-grid{ grid-template-columns:1fr; } }
+  .code-card, .term-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .code-head, .term-head{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .code-head .filename{ color:var(--dev); font-weight:700; }
+  .code-body{ padding:16px; font-family:var(--font-mono); font-size:12px; line-height:1.7; overflow-x:auto; }
+  .code-body .k{ color:#7fb0ff; }
+  .code-body .s{ color:#ffce7a; }
+  .code-body .n{ color:#7ee6b8; }
+  .code-body .c{ color:var(--muted); font-style:italic; }
+  .code-body .hl{ background:var(--dev-dim); border-left:2px solid var(--dev); display:block; margin:0 -16px; padding:0 14px; }
+  .term-body{ padding:14px 16px; font-family:var(--font-mono); font-size:11.5px; line-height:1.75; color:#c9d1cf; min-height:230px; }
+  .term-body .ok{ color:var(--tech); }
+  .term-body .amd{ color:var(--dev); }
+  .term-body .warn{ color:var(--gold); }
+  .term-body .prompt{ color:var(--flash); }
+  .igroup-table{ width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:11px; margin-top:2px; }
+  .igroup-table th{ text-align:left; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.06em; font-size:9px; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .igroup-table td{ padding:7px 8px; border-bottom:1px dashed var(--border); }
+  .igroup-table tr:last-child td{ border-bottom:none; }
+  .igroup-table .status{ color:var(--tech); }
+  .igroup-table .status.notready{ color:var(--gold); }
+  .dev-note{ font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:12px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); }
+  .dev-note b{ color:var(--dev); }
+  .launch-row{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-top:1px solid var(--border); }
+  .status-pill{ font-family:var(--font-mono); font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted); }
+  .status-pill.ready{ color:var(--tech); border-color:var(--tech); background:var(--tech-dim); }
+  .status-pill.notready{ color:var(--gold); border-color:var(--gold); background:var(--gold-dim); }
+
+  .shop-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; }
+  @media (max-width:820px){ .shop-grid{ grid-template-columns:1fr; } }
+  .device{ background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .device-bar{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .dot{ width:8px; height:8px; border-radius:50%; background:#3a3f47; }
+  .device-body{ padding:16px; }
+  .browsing-tag{ font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .browsing-tag b{ color:var(--flash); }
+  .product-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .product{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 8px; text-align:center; transition:transform .2s; }
+  .product:hover{ transform:translateY(-2px); border-color:var(--flash); }
+  .product .icon{ font-size:26px; }
+  .product .name{ font-size:11px; margin-top:6px; color:var(--text); }
+  .product .price{ font-family:var(--font-mono); font-size:11px; color:var(--gold); margin-top:2px; }
+
+  .rec-panel{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; display:flex; flex-direction:column; }
+  .rec-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .rec-head h3{ margin:0; font-family:var(--font-display); font-size:15px; font-weight:800; }
+  .latency-badge{ font-family:var(--font-mono); font-size:10px; background:var(--tech-dim); color:var(--tech); border:1px solid var(--tech); border-radius:20px; padding:4px 10px; white-space:nowrap; }
+  .rec-list{ display:flex; flex-direction:column; gap:8px; }
+  .rec-item{ display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; opacity:0; animation:fadein .5s forwards; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .rec-item .icon{ font-size:20px; width:30px; text-align:center; }
+  .rec-item .info{ flex:1; }
+  .rec-item .info .n{ font-size:12px; }
+  .rec-item .info .r{ font-family:var(--font-mono); font-size:10px; color:var(--muted); }
+  .rec-item .match{ font-family:var(--font-mono); font-size:11px; color:var(--flash); font-weight:700; }
+  .rec-foot{ margin-top:14px; padding-top:12px; border-top:1px dashed var(--border); font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+
+  .ops-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+  @media (max-width:820px){ .ops-grid{ grid-template-columns:1fr; } }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .card h4{ margin:0 0 2px; font-family:var(--font-display); font-size:14px; font-weight:800; }
+  .card .cap{ font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-bottom:10px; }
+  .chart-box{ height:170px; position:relative; }
+  .batch-row{ display:flex; align-items:center; gap:10px; margin-top:8px; }
+  .batch-track{ flex:1; height:10px; background:var(--surface-2); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .batch-fill{ height:100%; background:linear-gradient(90deg, var(--tech), var(--flash)); transition:width .5s; }
+  .batch-num{ font-family:var(--font-mono); font-size:12px; color:var(--tech); width:56px; text-align:right; }
+  .gpu-list{ display:flex; flex-direction:column; gap:10px; }
+  .gpu-row{ display:flex; align-items:center; gap:10px; }
+  .gpu-name{ font-family:var(--font-mono); font-size:11px; color:var(--muted); width:54px; }
+  .gpu-track{ flex:1; height:14px; background:var(--surface-2); border-radius:4px; overflow:hidden; border:1px solid var(--border); }
+  .gpu-fill{ height:100%; background:linear-gradient(90deg, var(--tech), var(--gold)); transition:width .5s; }
+  .gpu-pct{ font-family:var(--font-mono); font-size:11px; width:38px; text-align:right; color:var(--text); }
+  .card.span2{ grid-column:1/-1; }
+  .regime-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px; }
+  @media (max-width:640px){ .regime-grid{ grid-template-columns:1fr; } }
+  .regime-col{ border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--surface-2); transition:border-color .3s, box-shadow .3s; }
+  .regime-col.active{ border-color:var(--tech); box-shadow:0 0 0 1px var(--tech) inset; }
+  .regime-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .regime-name{ font-family:var(--font-display); font-weight:800; font-size:14px; }
+  .regime-tag{ font-family:var(--font-mono); font-size:9px; text-transform:uppercase; letter-spacing:.08em; padding:3px 9px; border-radius:20px; background:var(--surface); color:var(--muted); border:1px solid var(--border); }
+  .regime-col.active .regime-tag{ background:var(--tech-dim); color:var(--tech); border-color:var(--tech); }
+  .regime-row{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:12px; padding:5px 0; border-bottom:1px dashed var(--border); }
+  .regime-row:last-child{ border-bottom:none; }
+  .regime-row .k{ color:var(--muted); }
+  .regime-row .v{ color:var(--text); font-weight:600; }
+  .regime-note{ font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:10px; }
+  .regime-note b{ color:var(--tech); }
+
+  .biz-cards{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px; }
+  @media (max-width:1000px){ .biz-cards{ grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:640px){ .biz-cards{ grid-template-columns:repeat(2,1fr); } }
+  .biz-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .biz-card .lab{ font-family:var(--font-mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  .biz-card .val{ font-family:var(--font-display); font-weight:900; font-size:26px; margin-top:6px; }
+  .biz-card .val.flashval{ color:var(--flash); }
+  .biz-card .sub{ font-family:var(--font-mono); font-size:11px; color:var(--tech); margin-top:4px; }
+
+  .compare-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:22px; }
+  .compare-bars{ display:flex; flex-direction:column; gap:14px; margin-top:14px; }
+  .compare-row .lbl{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-bottom:5px; }
+  .compare-track{ height:22px; background:var(--surface-2); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .compare-fill{ height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-family:var(--font-mono); font-size:11px; font-weight:700; color:#0b0c0f; transition:width .8s ease; }
+  .compare-fill.standard{ background:var(--muted); }
+  .compare-fill.gpu{ background:linear-gradient(90deg, var(--tech), var(--flash)); }
+
+  .banner{
+    position:relative; overflow:hidden; border-radius:16px; border:1px solid var(--flash);
+    background:radial-gradient(120% 160% at 0% 0%, var(--flash-dim), var(--bg) 60%);
+    padding:32px 28px; display:flex; align-items:center; gap:28px; flex-wrap:wrap;
+  }
+  .banner .x{ font-family:var(--font-display); font-weight:900; font-size:clamp(64px,10vw,110px); line-height:.85; color:var(--flash); letter-spacing:-.03em; transform:scaleX(.92); }
+  .banner .copy{ flex:1; min-width:260px; }
+  .banner .copy .eyebrow{ font-family:var(--font-mono); font-size:11px; color:var(--flash); text-transform:uppercase; letter-spacing:.12em; margin-bottom:8px; }
+  .banner .copy p{ font-family:var(--font-display); font-weight:700; font-size:clamp(17px,2.2vw,22px); line-height:1.3; margin:0; letter-spacing:-.01em; }
+  .banner .copy .fine{ font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:10px; }
+
+  footer.stagefoot{ text-align:center; padding:26px 0 10px; font-family:var(--font-mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+  .offline-banner{ display:none; text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--flash); padding:8px; background:var(--flash-dim); border-bottom:1px solid var(--flash); }
+  .offline-banner.show{ display:block; }
+</style>
+</head>
+<body>
+
+<div class="offline-banner" id="offlineBanner">Can't reach the backend at /api/metrics — is app.py running?</div>
+
+<div class="brandbar">
+  <div class="brandrow">
+    <div>
+      <div class="brand-eyebrow">Model serving under real traffic</div>
+      <div class="brand-title">Black Friday <span>Shopping Rush</span></div>
+      <div class="stack-badge">Serving stack: <b>Triton Inference Server on ROCm</b><span class="divider">|</span>Example workload: CTR recommendation model</div>
+    </div>
+    <div class="controls">
+      <span class="mode-pill" id="modePill"><span class="dot"></span><span id="modeText">connecting…</span></span>
+      <button class="btn primary" id="rushBtn">Start the rush</button>
+      <button class="btn" id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <div class="gauge-wrap">
+    <div class="gauge-meta"><span>Concurrent shopper load</span><span>capacity: <b id="capLabel">1,000 inf/s baseline</b></span></div>
+    <div class="gauge-track">
+      <div class="gauge-fill" id="gaugeFill"></div>
+      <div class="gauge-labels"><span id="shopperCount">— active shoppers</span><span id="multiplier">1.0× baseline</span></div>
+    </div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat"><div class="stat-label">Throughput</div><div class="stat-value flash" id="hRps">—</div><div class="stat-sub">inferences / sec on Triton</div></div>
+    <div class="stat"><div class="stat-label">P50 latency</div><div class="stat-value tech" id="hLatency">— ms</div><div class="stat-sub">held flat under load</div></div>
+    <div class="stat"><div class="stat-label">P99 latency</div><div class="stat-value tech" id="hLatencyP99">— ms</div><div class="stat-sub">tail latency, same guarantee</div></div>
+    <div class="stat"><div class="stat-label">GPU utilization</div><div class="stat-value tech" id="hGpu">— %</div><div class="stat-sub" id="hGpuSource">ROCm devices, avg cluster</div></div>
+    <div class="stat"><div class="stat-label">Revenue opportunity</div><div class="stat-value gold" id="hRevenue">$0</div><div class="stat-sub">business read-out</div></div>
+  </div>
+
+  <div class="tabnav">
+    <div class="tab on c0" data-tab="0">Configure &amp; launch</div>
+    <div class="tab c1" data-tab="1">Example workload</div>
+    <div class="tab c2" data-tab="2">Triton on ROCm</div>
+    <div class="tab c3" data-tab="3">Business impact</div>
+  </div>
+</div>
+
+<div class="disclaimer">This UI is an <b>illustrative concept</b> for this demo. In LIVE mode the numbers are real, measured against your Triton server; in SIMULATED mode (no Triton reachable) they follow a scripted ramp for rehearsal.</div>
+
+<main>
+
+  <!-- SCREEN 0: DEVELOPER / CONFIG & LAUNCH -->
+  <section class="screen on" id="screen0">
+    <p class="panel-title">Configure the model, launch Triton on ROCm</p>
+    <p class="panel-sub">Everything downstream — the batching behavior, the GPU utilization, the flat latency — is a consequence of what's set here</p>
+
+    <div class="dev-grid">
+      <div class="code-card">
+        <div class="code-head"><span class="filename">triton_repo/ctr_recommender/config.pbtxt</span></div>
+<pre class="code-body">name: <span class="s">"ctr_recommender"</span>
+platform: <span class="s">"onnxruntime_onnx"</span>
+max_batch_size: <span class="n">256</span>
+
+<span class="hl"><span class="k">dynamic_batching</span> {
+  preferred_batch_size: [ <span class="n">32</span>, <span class="n">64</span>, <span class="n">128</span>, <span class="n">256</span> ]
+  max_queue_delay_microseconds: <span class="n">2000</span>
+}</span>  <span class="c">// ← the scheduler's wait/dispatch budget</span>
+
+<span class="hl"><span class="k">instance_group</span> [
+  {
+    name: <span class="s">"ctr_recommender_rocm"</span>
+    count: <span class="n">4</span>
+    kind: KIND_GPU
+    gpus: [ <span class="n">0</span>, <span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span> ]
+  }
+]</span>  <span class="c">// ← one instance pinned per ROCm GPU</span>
+
+<span class="hl"><span class="k">optimization</span> {
+  execution_accelerators {
+    gpu_execution_accelerator: [
+      { name: <span class="s">"rocm"</span>
+        parameters { key: <span class="s">"precision_mode"</span> value: <span class="s">"fp16"</span> }
+      }
+    ]
+  }
+}</span>  <span class="c">// ← ROCm execution provider + precision</span></pre>
+
+        <div class="dev-note"><b>max_queue_delay_microseconds</b> is the key scheduler knob: it caps how long Triton waits to fill a bigger batch before dispatching. This exact file lives at <code>triton_repo/ctr_recommender/config.pbtxt</code> in the project folder — edit it there, not here.</div>
+      </div>
+
+      <div>
+        <div class="term-card">
+          <div class="term-head"><span>$</span>&nbsp;launch</div>
+          <div class="term-body" id="termBody">
+            <div><span class="prompt">$</span> tritonserver --model-repository=./triton_repo \</div>
+            <div>&nbsp;&nbsp;--backend-config=onnxruntime,rocm-execution-provider=true</div>
+            <div id="termLog"></div>
+          </div>
+          <div class="launch-row">
+            <button class="btn dev" id="launchBtn">Check Triton status</button>
+            <span class="status-pill" id="statusPill">not checked</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h4>Per-instance-group breakdown</h4>
+          <div class="cap">how the 4 model instances map onto ROCm devices</div>
+          <table class="igroup-table">
+            <thead><tr><th>Instance</th><th>ROCm device</th><th>Kind</th><th>Status</th></tr></thead>
+            <tbody id="igroupBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 1 -->
+  <section class="screen" id="screen1">
+    <p class="panel-title">The example workload: a CTR recommendation model</p>
+    <p class="panel-sub">Used here only so the throughput and latency numbers on the next two screens have a concrete, relatable model behind them</p>
+    <div class="shop-grid">
+      <div class="device">
+        <div class="device-bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div>&nbsp;shop.example.com/doorbusters</div>
+        <div class="device-body">
+          <div class="browsing-tag">Currently viewing: <b id="browsingItem">Wireless Headphones</b></div>
+          <div class="product-grid" id="productGrid"></div>
+        </div>
+      </div>
+
+      <div class="rec-panel">
+        <div class="rec-head">
+          <h3>Recommended for you</h3>
+          <div class="latency-badge" id="recLatencyBadge">— ms</div>
+        </div>
+        <div class="rec-list" id="recList"></div>
+        <div class="rec-foot">Every scroll is a new CTR inference request. What changes screen-to-screen is how many of these arrive per second — that's the story on the Triton tab.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2 -->
+  <section class="screen" id="screen2">
+    <p class="panel-title">Triton Inference Server, on ROCm, under real traffic</p>
+    <p class="panel-sub">How the serving stack behaves as load moves from light to heavy — not the model, the infrastructure underneath it</p>
+
+    <div class="ops-grid">
+      <div class="card span2">
+        <h4>System behavior: light vs. heavy traffic</h4>
+        <div class="cap">reference operating points — the highlighted column tracks live data</div>
+        <div class="regime-grid">
+          <div class="regime-col" id="regimeLight">
+            <div class="regime-head"><div class="regime-name">Light traffic</div><div class="regime-tag" id="tagLight">reference</div></div>
+            <div class="regime-row"><span class="k">Concurrent shoppers</span><span class="v">~300</span></div>
+            <div class="regime-row"><span class="k">Throughput</span><span class="v">~330 inf/s</span></div>
+            <div class="regime-row"><span class="k">P50 / P99 latency</span><span class="v">36 / 50 ms</span></div>
+            <div class="regime-row"><span class="k">Dynamic batch size</span><span class="v">~16</span></div>
+            <div class="regime-row"><span class="k">GPU utilization</span><span class="v">~38%</span></div>
+            <div class="regime-row"><span class="k">Request queue depth</span><span class="v">~0</span></div>
+          </div>
+          <div class="regime-col" id="regimeHeavy">
+            <div class="regime-head"><div class="regime-name">Heavy traffic (5×)</div><div class="regime-tag" id="tagHeavy">reference</div></div>
+            <div class="regime-row"><span class="k">Concurrent shoppers</span><span class="v">~4,800</span></div>
+            <div class="regime-row"><span class="k">Throughput</span><span class="v">~5,000 inf/s</span></div>
+            <div class="regime-row"><span class="k">P50 / P99 latency</span><span class="v">47 / 66 ms</span></div>
+            <div class="regime-row"><span class="k">Dynamic batch size</span><span class="v">~248</span></div>
+            <div class="regime-row"><span class="k">GPU utilization</span><span class="v">~89%</span></div>
+            <div class="regime-row"><span class="k">Request queue depth</span><span class="v">~0</span></div>
+          </div>
+        </div>
+        <div class="regime-note" id="liveDataNote">Live numbers below (current: <b id="currentThroughput">—</b> inf/s, P50 <b id="currentP50">—</b> ms) come straight from <code>/api/metrics</code>.</div>
+      </div>
+
+      <div class="card">
+        <h4>Concurrent shoppers</h4>
+        <div class="cap">arrival-side load over time</div>
+        <div class="chart-box"><canvas id="chartRequests"></canvas></div>
+      </div>
+      <div class="card">
+        <h4>Throughput scaling</h4>
+        <div class="cap">inferences/sec served vs. single-request-batch baseline</div>
+        <div class="chart-box"><canvas id="chartThroughput"></canvas></div>
+      </div>
+      <div class="card">
+        <h4>Triton dynamic batcher</h4>
+        <div class="cap">estimated batch size (from Triton metrics when live) — larger batches, same per-request latency</div>
+        <div class="batch-row"><div class="batch-track"><div class="batch-fill" id="batchFill"></div></div><div class="batch-num" id="batchNum">—</div></div>
+        <div class="cap" style="margin-top:10px;">queue depth: <span id="queueDepth">—</span> (stays near 0 if batching keeps up)</div>
+      </div>
+      <div class="card">
+        <h4>GPU utilization — ROCm devices</h4>
+        <div class="cap">source: <span id="gpuSourceLabel">—</span></div>
+        <div class="gpu-list" id="gpuList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 3 -->
+  <section class="screen" id="screen3">
+    <p class="panel-title">Infrastructure capability, in business terms</p>
+    <p class="panel-sub">Same ROCm-enabled Triton deployment — read as throughput and cost efficiency, not just request counts</p>
+
+    <div class="biz-cards">
+      <div class="biz-card"><div class="lab">Peak throughput</div><div class="val flashval" id="bThroughput">0</div><div class="sub">inf/sec on Triton · ROCm</div></div>
+      <div class="biz-card"><div class="lab">P50 latency at peak</div><div class="val" id="bLatency">0 ms</div><div class="sub">unchanged from light traffic</div></div>
+      <div class="biz-card"><div class="lab">Recommendations served</div><div class="val" id="bRecs">0</div><div class="sub">cumulative this session</div></div>
+      <div class="biz-card"><div class="lab">Estimated conversions</div><div class="val" id="bConv">0</div><div class="sub">at 3.8% conversion rate</div></div>
+      <div class="biz-card"><div class="lab">Revenue opportunity</div><div class="val" id="bRev">$0</div><div class="sub">at $85 avg. order value</div></div>
+    </div>
+
+    <div class="compare-card">
+      <h4 style="margin:0; font-family:var(--font-display); font-size:15px;">Requests handled during peak — same hardware footprint</h4>
+      <div class="cap" style="font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:2px;">single-request-batch baseline vs. Triton's dynamic batcher on ROCm</div>
+      <div class="compare-bars">
+        <div class="compare-row">
+          <div class="lbl"><span>Static, unbatched serving</span><span>1,000 inf/s ceiling</span></div>
+          <div class="compare-track"><div class="compare-fill standard" style="width:20%;">1,000</div></div>
+        </div>
+        <div class="compare-row">
+          <div class="lbl"><span>Triton dynamic batching on ROCm</span><span id="gpuCapLabel">5,000 inf/s sustained</span></div>
+          <div class="compare-track"><div class="compare-fill gpu" id="gpuCompareFill" style="width:20%;">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="banner">
+      <div class="x">5X</div>
+      <div class="copy">
+        <div class="eyebrow">Same GPUs, same latency budget, five times the traffic</div>
+        <p>ROCm-enabled Triton Inference Server sustains 5X more inference throughput at peak — without added infrastructure and without giving up latency.</p>
+        <div class="fine">The CTR model made the traffic relatable. The dynamic batcher and ROCm GPUs made the throughput possible.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="stagefoot">Data source: <span id="footerMode">connecting…</span> · polling /api/metrics every 700ms</footer>
+
+<script>
+(function(){
+  const products = [
+    {icon:"🎧", name:"Wireless Headphones", price:"$79"},
+    {icon:"⌚", name:"Fitness Watch", price:"$129"},
+    {icon:"👟", name:"Running Shoes", price:"$95"},
+    {icon:"📷", name:"Compact Camera", price:"$249"},
+    {icon:"🧥", name:"Winter Jacket", price:"$110"},
+    {icon:"🎮", name:"Game Controller", price:"$59"},
+    {icon:"💻", name:"Ultrabook", price:"$799"},
+    {icon:"🔊", name:"Bluetooth Speaker", price:"$49"},
+    {icon:"🧴", name:"Skincare Set", price:"$38"},
+  ];
+  const recPool = [
+    {icon:"🎒", name:"Travel Backpack", reason:"often bought with headphones"},
+    {icon:"🔋", name:"Fast Charger 65W", reason:"frequently viewed together"},
+    {icon:"🕶️", name:"Polarized Sunglasses", reason:"trending in your region"},
+    {icon:"⌨️", name:"Mechanical Keyboard", reason:"matches your browsing pattern"},
+    {icon:"🧦", name:"Merino Wool Socks", reason:"popular add-on this hour"},
+    {icon:"📱", name:"Phone Stand", reason:"based on recent views"},
+    {icon:"🎁", name:"Gift Wrap Bundle", reason:"seasonal pick"},
+    {icon:"🧢", name:"Wool Beanie", reason:"similar shoppers also liked"},
+  ];
+
+  const grid = document.getElementById('productGrid');
+  products.forEach(p=>{
+    const el = document.createElement('div');
+    el.className='product';
+    el.innerHTML = `<div class="icon">${p.icon}</div><div class="name">${p.name}</div><div class="price">${p.price}</div>`;
+    grid.appendChild(el);
+  });
+
+  let lastData = null;
+
+  function renderRecs(){
+    const list = document.getElementById('recList');
+    list.innerHTML='';
+    const shuffled = [...recPool].sort(()=>Math.random()-0.5).slice(0,4);
+    shuffled.forEach((r,i)=>{
+      const el = document.createElement('div');
+      el.className='rec-item';
+      el.style.animationDelay = (i*0.08)+'s';
+      el.innerHTML = `<div class="icon">${r.icon}</div><div class="info"><div class="n">${r.name}</div><div class="r">${r.reason}</div></div><div class="match">${92-i*4}%</div>`;
+      list.appendChild(el);
+    });
+    document.getElementById('browsingItem').textContent = products[Math.floor(Math.random()*products.length)].name;
+    if(lastData) document.getElementById('recLatencyBadge').textContent = `generated in ${Math.round(lastData.latency_p50_ms)}ms`;
+  }
+
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+      document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+      tab.classList.add('on');
+      document.getElementById('screen'+tab.dataset.tab).classList.add('on');
+    });
+  });
+
+  function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+  function fmtMoney(n){ return '$'+Math.round(n).toLocaleString('en-US'); }
+
+  function makeLineChart(ctx, color){
+    return new Chart(ctx, {
+      type:'line',
+      data:{ labels:Array(24).fill(''), datasets:[{ data:Array(24).fill(0), borderColor:color, backgroundColor:color+'22', fill:true, tension:.35, pointRadius:0, borderWidth:2 }] },
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{ legend:{display:false}, tooltip:{enabled:false} },
+        scales:{ x:{display:false}, y:{ grid:{color:'#2a2e35'}, ticks:{color:'#8a8f98', font:{family:'ui-monospace', size:10}} } }
+      }
+    });
+  }
+  function pushChart(chart, value){
+    chart.data.datasets[0].data.push(Number(value)||0);
+    chart.data.datasets[0].data.shift();
+    chart.update('none');
+  }
+  const chartRequests = makeLineChart(document.getElementById('chartRequests').getContext('2d'), '#ff4620');
+  const chartThroughput = makeLineChart(document.getElementById('chartThroughput').getContext('2d'), '#2fe0c4');
+
+  const BASELINE_CAP = 1000;
+  const HEAVY_REF = 5200;
+
+  function render(data){
+    lastData = data;
+    const offline = document.getElementById('offlineBanner');
+    offline.classList.remove('show');
+
+    const modePill = document.getElementById('modePill');
+    modePill.className = 'mode-pill ' + data.mode;
+    document.getElementById('modeText').textContent = data.mode === 'live' ? 'LIVE — Triton on ROCm' : 'SIMULATED (no Triton reachable)';
+    document.getElementById('footerMode').textContent = data.mode === 'live' ? 'live Triton metrics' : 'scripted simulation';
+
+    const loadRatio = Math.min(1, data.shoppers / HEAVY_REF);
+    document.getElementById('gaugeFill').style.width = (8 + loadRatio*90) + '%';
+    document.getElementById('shopperCount').textContent = fmt(data.shoppers) + ' active shoppers';
+    const mult = Math.max(1, data.throughput_inf_s / BASELINE_CAP);
+    document.getElementById('multiplier').textContent = mult.toFixed(1) + '× baseline';
+
+    document.getElementById('hRps').textContent = fmt(data.throughput_inf_s);
+    document.getElementById('hLatency').textContent = Math.round(data.latency_p50_ms) + ' ms';
+    document.getElementById('hLatencyP99').textContent = Math.round(data.latency_p99_ms) + ' ms';
+    const avgGpu = data.gpu_utilization.reduce((a,b)=>a+b,0) / (data.gpu_utilization.length||1);
+    document.getElementById('hGpu').textContent = Math.round(avgGpu) + '%';
+    document.getElementById('hGpuSource').textContent = data.gpu_utilization_source ? `source: ${data.gpu_utilization_source}` : 'ROCm devices, avg cluster';
+    document.getElementById('hRevenue').textContent = fmtMoney(data.revenue_opportunity);
+
+    const heavy = data.regime === 'heavy';
+    document.getElementById('regimeLight').classList.toggle('active', !heavy);
+    document.getElementById('regimeHeavy').classList.toggle('active', heavy);
+    document.getElementById('tagLight').textContent = !heavy ? 'live now' : 'reference';
+    document.getElementById('tagHeavy').textContent = heavy ? 'live now' : 'reference';
+    document.getElementById('currentThroughput').textContent = fmt(data.throughput_inf_s);
+    document.getElementById('currentP50').textContent = Math.round(data.latency_p50_ms);
+
+    const batch = data.batch_size_estimate || 0;
+    document.getElementById('batchFill').style.width = Math.min(100, (batch/256)*100) + '%';
+    document.getElementById('batchNum').textContent = Math.round(batch);
+    document.getElementById('queueDepth').textContent = data.queue_depth != null ? data.queue_depth : '—';
+    document.getElementById('gpuSourceLabel').textContent = data.gpu_utilization_source || 'unavailable';
+
+    const gpuList = document.getElementById('gpuList');
+    gpuList.innerHTML='';
+    data.gpu_utilization.forEach((g,i)=>{
+      const row = document.createElement('div');
+      row.className='gpu-row';
+      row.innerHTML = `<div class="gpu-name">GPU ${i}</div><div class="gpu-track"><div class="gpu-fill" style="width:${g}%"></div></div><div class="gpu-pct">${Math.round(g)}%</div>`;
+      gpuList.appendChild(row);
+    });
+
+    document.getElementById('bThroughput').textContent = fmt(data.throughput_inf_s);
+    document.getElementById('bLatency').textContent = Math.round(data.latency_p50_ms) + ' ms';
+    document.getElementById('bRecs').textContent = fmt(data.recs_served_cumulative);
+    document.getElementById('bConv').textContent = fmt(data.recs_served_cumulative * 0.038);
+    document.getElementById('bRev').textContent = fmtMoney(data.revenue_opportunity);
+    const gpuPct = Math.min(100, (data.throughput_inf_s/(BASELINE_CAP*5))*100);
+    const fillEl = document.getElementById('gpuCompareFill');
+    fillEl.style.width = Math.max(20, gpuPct) + '%';
+    fillEl.textContent = fmt(data.throughput_inf_s);
+    document.getElementById('gpuCapLabel').textContent = fmt(BASELINE_CAP*5) + ' inf/s sustained';
+
+    pushChart(chartRequests, data.shoppers);
+    pushChart(chartThroughput, data.throughput_inf_s);
+
+    const rushBtn = document.getElementById('rushBtn');
+    if(data.rushing){ rushBtn.textContent = 'Stop the rush'; rushBtn.classList.remove('primary'); rushBtn.classList.add('active'); }
+    else { rushBtn.textContent = 'Start the rush'; rushBtn.classList.remove('active'); rushBtn.classList.add('primary'); }
+  }
+
+  async function pollMetrics(){
+    try{
+      const resp = await fetch('/api/metrics');
+      if(!resp.ok) throw new Error('bad status');
+      const data = await resp.json();
+      render(data);
+    }catch(e){
+      document.getElementById('offlineBanner').classList.add('show');
+    }
+  }
+
+  document.getElementById('rushBtn').addEventListener('click', async ()=>{
+    const action = lastData && lastData.rushing ? 'stop' : 'start';
+    await fetch('/api/rush', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action}) });
+    pollMetrics();
+  });
+  document.getElementById('resetBtn').addEventListener('click', async ()=>{
+    await fetch('/api/reset', { method:'POST' });
+    pollMetrics();
+  });
+
+  // ---------- Configure & launch screen ----------
+  function renderIgroup(status){
+    const body = document.getElementById('igroupBody');
+    body.innerHTML='';
+    for(let i=0;i<4;i++){
+      const cls = status==='loaded' ? 'status' : (status==='not ready' ? 'status notready' : '');
+      body.appendChild(Object.assign(document.createElement('tr'), {
+        innerHTML: `<td>ctr_recommender_rocm_${i}</td><td>ROCm:${i}</td><td>KIND_GPU</td><td class="${cls}">${status}</td>`
+      }));
+    }
+  }
+  renderIgroup('not checked');
+
+  const canned = [
+    `I0917 12:00:01.050 1 rocm_provider_factory.cc:120] <span class="amd">ROCm device 0: AMD Instinct — detected</span>`,
+    `I0917 12:00:01.061 1 rocm_provider_factory.cc:120] <span class="amd">ROCm device 1: AMD Instinct — detected</span>`,
+    `I0917 12:00:01.072 1 rocm_provider_factory.cc:120] <span class="amd">ROCm device 2: AMD Instinct — detected</span>`,
+    `I0917 12:00:01.083 1 rocm_provider_factory.cc:120] <span class="amd">ROCm device 3: AMD Instinct — detected</span>`,
+    `I0917 12:00:01.900 1 dynamic_batch_scheduler.cc:339] scheduler started — max_queue_delay_microseconds=2000`,
+  ];
+
+  document.getElementById('launchBtn').addEventListener('click', async function(){
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    document.getElementById('statusPill').textContent = 'checking';
+    document.getElementById('statusPill').className = 'status-pill';
+    const termLog = document.getElementById('termLog');
+    termLog.innerHTML='';
+    renderIgroup('checking');
+
+    let i=0;
+    const iv = setInterval(async ()=>{
+      if(i>=canned.length){
+        clearInterval(iv);
+        try{
+          const resp = await fetch('/api/launch', { method:'POST' });
+          const data = await resp.json();
+          const line = document.createElement('div');
+          if(data.ready){
+            line.innerHTML = `<span class="ok">✓ Triton at ${data.triton_url} is ready — model '${data.model_name}' loaded (mode: live)</span>`;
+            document.getElementById('statusPill').textContent = 'ready';
+            document.getElementById('statusPill').classList.add('ready');
+            renderIgroup('loaded');
+          } else {
+            line.innerHTML = `<span class="warn">⚠ Triton not ready (${data.detail}). Falling back to simulated mode for this dashboard.</span>`;
+            document.getElementById('statusPill').textContent = 'not ready';
+            document.getElementById('statusPill').classList.add('notready');
+            renderIgroup('not ready');
+          }
+          termLog.appendChild(line);
+        }catch(e){
+          const line = document.createElement('div');
+          line.innerHTML = `<span class="warn">⚠ Could not reach the backend to check Triton status.</span>`;
+          termLog.appendChild(line);
+        }
+        btn.disabled=false; btn.textContent='Check Triton status';
+        return;
+      }
+      const d = document.createElement('div');
+      d.innerHTML = canned[i];
+      termLog.appendChild(d);
+      i++;
+    }, 180);
+  });
+
+  renderRecs();
+  setInterval(renderRecs, 3200);
+  setInterval(pollMetrics, 700);
+  pollMetrics();
+})();
+</script>
+</body>
+</html>

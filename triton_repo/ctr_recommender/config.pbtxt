@@ -1,0 +1,48 @@
+name: "ctr_recommender"
+platform: "onnxruntime_onnx"
+max_batch_size: 256
+
+input [
+  {
+    name: "INPUT"
+    data_type: TYPE_FP32
+    dims: [ 32 ]
+  }
+]
+output [
+  {
+    name: "OUTPUT"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+# The scheduler's wait/dispatch budget: how long Triton waits to fill a
+# bigger batch before dispatching it. This is the field that explains the
+# batch-size and flat-latency behavior shown in the dashboard.
+dynamic_batching {
+  preferred_batch_size: [ 32, 64, 128, 256 ]
+  max_queue_delay_microseconds: 2000
+}
+
+# One model instance pinned per ROCm GPU.
+instance_group [
+  {
+    name: "ctr_recommender_rocm"
+    count: 4
+    kind: KIND_GPU
+    gpus: [ 0, 1, 2, 3 ]
+  }
+]
+
+# ROCm execution provider + precision.
+optimization {
+  execution_accelerators {
+    gpu_execution_accelerator: [
+      {
+        name: "rocm"
+        parameters { key: "precision_mode" value: "fp16" }
+      }
+    ]
+  }
+}
