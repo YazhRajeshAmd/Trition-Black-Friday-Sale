@@ -66,15 +66,23 @@ explicit.
    `INPUT_NAME` / `OUTPUT_NAME` env vars to match.
 
 2. **Launch Triton on the ROCm host**, with the model repository
-   mounted:
+   mounted. This must be run somewhere with AMD Instinct GPUs and ROCm
+   installed, and Docker (or podman) available:
 
    ```bash
+   chmod +x scripts/launch_triton.sh   # zip extraction can drop the +x bit
+   docker pull rocm/tritoninferenceserver:tritoninferenceserver-25.12.amd1_rocm7.2_ubuntu24.04_py3.12
    ./scripts/launch_triton.sh
    ```
 
-   See the comments in that script for the equivalent `docker run`
-   invocation if you're using a ROCm Triton container. This must be run
-   somewhere with AMD Instinct GPUs and ROCm installed.
+   This runs that image in a container with `/dev/kfd` and `/dev/dri`
+   passed through, mounts `triton_repo/` into it, and starts
+   `tritonserver` with the ROCm execution provider enabled. Override the
+   image or switch to podman without editing the script:
+
+   ```bash
+   CONTAINER_RUNTIME=podman TRITON_IMAGE=my-registry/my-triton-rocm:tag ./scripts/launch_triton.sh
+   ```
 
 3. **Run the backend**, pointed at that Triton instance:
 
