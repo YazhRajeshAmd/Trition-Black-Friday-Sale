@@ -35,14 +35,3 @@ instance_group [
   }
 ]
 
-# ROCm execution provider + precision.
-optimization {
-  execution_accelerators {
-    gpu_execution_accelerator: [
-      {
-        name: "rocm"
-        parameters { key: "precision_mode" value: "fp16" }
-      }
-    ]
-  }
-}
