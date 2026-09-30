@@ -1,0 +1,204 @@
+.screen { padding-top: var(--space-lg); }
+
+.panelTitle {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: 1.25rem;
+  color: var(--amd-white);
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+
+.panelSub {
+  font-family: var(--font-primary);
+  font-size: var(--text-body);
+  color: var(--amd-muted);
+  margin-bottom: var(--space-lg);
+}
+
+.devGrid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: var(--space-md);
+  align-items: start;
+}
+
+@media (max-width: 900px) { .devGrid { grid-template-columns: 1fr; } }
+
+.codeCard {
+  background: var(--amd-bg-card);
+  border: 1px solid var(--amd-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.codeHead {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--amd-border);
+  font-family: var(--font-primary);
+  font-size: var(--text-small);
+  color: var(--amd-muted);
+}
+
+.filename { color: var(--amd-teal); font-weight: 700; font-size: var(--text-small); }
+
+.codeBody {
+  padding: var(--space-md);
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-x: auto;
+  color: var(--amd-white);
+  white-space: pre-wrap;
+}
+
+.k { color: #7fb0ff; }
+.s { color: #ffce7a; }
+.n { color: #7ee6b8; }
+.c { color: var(--amd-muted); font-style: italic; }
+
+.hl {
+  background: rgba(124, 155, 255, 0.08);
+  border-left: 2px solid rgba(124, 155, 255, 0.5);
+  display: block;
+  margin: 0 -16px;
+  padding: 0 14px;
+}
+
+.devNote {
+  font-family: var(--font-primary);
+  font-size: var(--text-small);
+  color: var(--amd-muted);
+  padding: var(--space-md);
+  border-top: 1px solid var(--amd-border);
+  line-height: 1.6;
+}
+
+.devNote strong { color: var(--amd-teal); }
+.devNote code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75em;
+  background: var(--amd-bg-input);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.termCard {
+  background: var(--amd-bg-card);
+  border: 1px solid var(--amd-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.termHead {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--amd-border);
+  font-family: ui-monospace, monospace;
+  font-size: var(--text-small);
+  color: var(--amd-muted);
+}
+
+.termBody {
+  padding: 14px 16px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--amd-muted);
+  min-height: 200px;
+}
+
+.prompt { color: #ef4444; }
+.logOk  { color: var(--amd-teal); }
+.logAmd { color: var(--amd-teal); opacity: 0.85; }
+.logWarn { color: var(--amd-gold); }
+
+.launchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--amd-border);
+}
+
+.launchBtn {
+  font-family: var(--font-primary);
+  font-size: var(--text-small);
+  font-weight: 600;
+  background: var(--amd-teal);
+  color: var(--amd-black);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.launchBtn:hover { opacity: 0.85; }
+.launchBtn:disabled { opacity: 0.5; cursor: default; }
+
+.statusPill {
+  font-family: var(--font-primary);
+  font-size: var(--text-small);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--amd-border-mid);
+  color: var(--amd-muted);
+}
+
+.pillOk  { color: var(--amd-teal); border-color: var(--amd-teal); background: rgba(0, 194, 222, 0.06); }
+.pillWarn { color: var(--amd-gold); border-color: var(--amd-gold); background: rgba(193, 169, 104, 0.08); }
+
+.iCard {
+  background: var(--amd-bg-card);
+  border: 1px solid var(--amd-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.iCardTitle {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-title);
+  color: var(--amd-white);
+  margin-bottom: 2px;
+}
+
+.iCardSub {
+  font-family: var(--font-primary);
+  font-size: 0.7rem;
+  color: var(--amd-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.iTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.iTable th {
+  text-align: left;
+  color: var(--amd-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--amd-border);
+}
+
+.iTable td {
+  padding: 7px 8px;
+  border-bottom: 1px dashed var(--amd-border);
+  color: var(--amd-muted);
+}
+
+.iTable tr:last-child td { border-bottom: none; }
+.statusOk  { color: var(--amd-teal); }
+.statusWarn { color: var(--amd-gold); }
