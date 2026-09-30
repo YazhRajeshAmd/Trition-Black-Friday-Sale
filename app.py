@@ -75,8 +75,9 @@ ROLLING_WINDOW_SECONDS = float(os.environ.get("ROLLING_WINDOW_SECONDS", "3"))
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "1.0"))
 BASELINE_CAP = 1000  # inf/s a naive, unbatched setup is assumed to sustain
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+FRONTEND_DIR = os.environ.get("FRONTEND_DIR", "frontend/dist")
 
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
 
 # ---------------------------------------------------------------------------
 # Shared state
