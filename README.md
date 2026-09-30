@@ -84,13 +84,17 @@ explicit.
    CONTAINER_RUNTIME=podman TRITON_IMAGE=my-registry/my-triton-rocm:tag ./scripts/launch_triton.sh
    ```
 
-3. **Run the backend**, pointed at that Triton instance:
-
+3. **Run the backend and frontend**, pointed at that Triton instance:
+   
    ```bash
    pip install -r requirements.txt
    TRITON_HTTP_URL=<triton-host>:8000 python app.py
    ```
-
+   ```bash
+   cd frontend
+    npm install
+    npm run build
+   ```
    (If `app.py` and Triton are on the same machine, the default
    `localhost:8000` just works.)
 
